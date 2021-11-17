@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.raywenderlich.rw_sec4_podplay">
 
-    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.INTERNET" />
 
 
     <application
@@ -12,14 +12,31 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.RW_Sec4_PodPlay">
+
+        <!--android:launchMode="singleTop" : Dành cho Searchable, bình thường khi search ra kết quả thì nó sẽ mở một Activity mới
+        , nhưng nếu set launchMode=singleTop thì khi search ra kết quả nó dùng activity hiện tại, ko mở một Activity mới
+        Full English:
+        This tells the system to skip adding another PodcastActivity to the stack if it’s already on top.
+        Now, instead of creating a new copy of PodcastActivity to receive the search Intent, a call is made to onNewIntent() on the existing PodcastActivity.-->
         <activity
             android:name=".ui.PodcastActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.PodPlay.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
+                <!--Dành cho Searchable ở action bar (cái nút kính lúp)-->
+                <action android:name="android.intent.action.SEARCH" />
+
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!--Dành cho Searchable ở action bar (cái nút kính lúp)-->
+            <meta-data
+                android:name="android.app.searchable"
+                android:resource="@xml/searchable" />
+
         </activity>
     </application>
 
