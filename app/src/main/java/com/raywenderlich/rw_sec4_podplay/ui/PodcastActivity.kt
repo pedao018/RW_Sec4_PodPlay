@@ -9,6 +9,7 @@ import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
@@ -21,6 +22,7 @@ import com.raywenderlich.rw_sec4_podplay.databinding.ActivityPodcastBinding
 import com.raywenderlich.rw_sec4_podplay.repository.ItunesRepo
 import com.raywenderlich.rw_sec4_podplay.repository.PodcastRepo
 import com.raywenderlich.rw_sec4_podplay.service.ItunesService
+import com.raywenderlich.rw_sec4_podplay.service.RssFeedService
 import com.raywenderlich.rw_sec4_podplay.viewmodel.PodcastViewModel
 import com.raywenderlich.rw_sec4_podplay.viewmodel.SearchViewModel
 import kotlinx.coroutines.Dispatchers
@@ -60,8 +62,10 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
 
     private fun setupViewModels() {
         val service = ItunesService.instance
+        val rssFeedService = RssFeedService.instance
         searchViewModel.iTunesRepo = ItunesRepo(service)
-        podcastViewModel.podcastRepo = PodcastRepo()
+        podcastViewModel.podcastRepo = PodcastRepo(rssFeedService)
+        createSubscription()
     }
 
     private fun updateControls() {
@@ -102,17 +106,21 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
     }
 
     override fun onShowDetails(podcastSummaryViewData: SearchViewModel.PodcastSummaryViewData) {
-        val feedUrl = podcastSummaryViewData.feedUrl ?: return
-
-        showProgressBar()
-        val podcast = podcastViewModel.getPodcast(podcastSummaryViewData)
-        hideProgressBar()
-
-        if (podcast != null) {
-            showDetailsFragment()
-        } else {
-            showError("Error loading feed $feedUrl")
+        podcastSummaryViewData.feedUrl?.let {
+            showProgressBar()
+            podcastViewModel.getPodcast(podcastSummaryViewData)
         }
+    }
+
+    private fun createSubscription() {
+        podcastViewModel.podcastLiveData.observe(this, {
+            hideProgressBar()
+            if (it != null) {
+                showDetailsFragment()
+            } else {
+                showError("Error loading feed")
+            }
+        })
     }
 
     private fun showDetailsFragment() {
@@ -183,10 +191,27 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
 
     private fun showProgressBar() {
         binding.progressBar.visibility = View.VISIBLE
+        disableUserInteraction()
     }
 
     private fun hideProgressBar() {
         binding.progressBar.visibility = View.INVISIBLE
+        enableUserInteraction()
+    }
+
+    //Disable user touching the main window
+    private fun disableUserInteraction() {
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        )
+    }
+
+    //Enable user touching the main window
+    private fun enableUserInteraction() {
+        window.clearFlags(
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        )
     }
 
     private fun showError(message: String) {

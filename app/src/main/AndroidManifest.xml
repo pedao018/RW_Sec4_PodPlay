@@ -5,13 +5,17 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
 
+    <!--Starting with Android 9 (API Level 28), by default, apps may not use cleartext network traffic.
+    Cleartext traffic results from connections where the URL starts with HTTP, not HTTPS.
+    Since you cannot control the URL of the podcast feed, you’ll set a flag that allows the app to use cleartext traffic-->
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.RW_Sec4_PodPlay">
+        android:theme="@style/Theme.RW_Sec4_PodPlay"
+        android:usesCleartextTraffic="true">
 
         <!--android:launchMode="singleTop" : Dành cho Searchable, bình thường khi search ra kết quả thì nó sẽ mở một Activity mới
         , nhưng nếu set launchMode=singleTop thì khi search ra kết quả nó dùng activity hiện tại, ko mở một Activity mới
