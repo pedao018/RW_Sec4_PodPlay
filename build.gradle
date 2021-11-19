@@ -7,6 +7,7 @@ buildscript {
         coroutines_version = '1.5.2'
         retrofit_version = '2.9.0'
         okhttp_version = '4.8.1'
+        room_version = '2.3.0'
     }
     repositories {
         google()

@@ -14,6 +14,7 @@ import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SearchView
+import androidx.lifecycle.viewModelScope
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.raywenderlich.rw_sec4_podplay.R
@@ -30,7 +31,8 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapterListener {
+class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapterListener,
+    PodcastDetailsFragment.OnPodcastDetailsListener {
     private lateinit var binding: ActivityPodcastBinding
     private val searchViewModel by viewModels<SearchViewModel>()
     private lateinit var podcastListAdapter: PodcastListAdapter
@@ -48,6 +50,7 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
         setupToolbar()
         setupViewModels()
         updateControls()
+        setupPodcastListView()
 
         //This gets the saved Intent and passes it to the existing handleIntent() method
         //For not to lost data when rotate screen
@@ -64,7 +67,7 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
         val service = ItunesService.instance
         val rssFeedService = RssFeedService.instance
         searchViewModel.iTunesRepo = ItunesRepo(service)
-        podcastViewModel.podcastRepo = PodcastRepo(rssFeedService)
+        podcastViewModel.podcastRepo = PodcastRepo(rssFeedService, podcastViewModel.podcastDao)
         createSubscription()
     }
 
@@ -102,6 +105,19 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
         if (binding.podcastRecyclerView.visibility == View.INVISIBLE) {
             searchMenuItem.isVisible = false
         }
+
+        //Để auto generate interface này: gõ object: MenuItem.OnActionExpandListener{}
+        // -> trỏ chuột vào giữa {} vào chọn Code -> implement method
+        searchMenuItem.setOnActionExpandListener(object : MenuItem.OnActionExpandListener {
+            override fun onMenuItemActionExpand(p0: MenuItem?): Boolean {
+                return true
+            }
+
+            override fun onMenuItemActionCollapse(p0: MenuItem?): Boolean {
+                showSubscribedPodcasts()
+                return true
+            }
+        })
         return true
     }
 
@@ -110,6 +126,20 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
             showProgressBar()
             podcastViewModel.getPodcast(podcastSummaryViewData)
         }
+
+        //Another way without subsribe live-data
+        // , nhưng mình nghĩ nó chưa ổn, nó vẫn chạy hideProgressbar trước khi getPodcast load data xong
+        /*
+        In PodcastViewModel.kt, simply add the suspend keyword in front of the getPodcast() function.
+        Then in PodcastActivity.kt update the body of onShowDetails() as follows:
+        * */
+        /*podcastSummaryViewData.feedUrl ?: return
+        showProgressBar()
+        podcastViewModel.viewModelScope.launch(context = Dispatchers.Main) {
+            podcastViewModel.getPodcast(podcastSummaryViewData)
+            hideProgressBar()
+            showDetailsFragment()
+        }*/
     }
 
     private fun createSubscription() {
@@ -187,6 +217,32 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
                 binding.podcastRecyclerView.visibility = View.VISIBLE
             }
         }
+    }
+
+    private fun setupPodcastListView() {
+        podcastViewModel.getPodcasts()?.observe(this, {
+            if (it != null) {
+                showSubscribedPodcasts()
+            }
+        })
+    }
+
+    private fun showSubscribedPodcasts() {
+        val podcasts = podcastViewModel.getPodcasts()?.value
+        if (podcasts != null) {
+            binding.toolbar.title = getString(R.string.subscribed_podcasts)
+            podcastListAdapter.setSearchData(podcasts)
+        }
+    }
+
+    override fun onSubscribe() {
+        podcastViewModel.saveActivePodcast()
+        supportFragmentManager.popBackStack()
+    }
+
+    override fun onUnSubsribe() {
+        podcastViewModel.deleteActivePodcast()
+        supportFragmentManager.popBackStack()
     }
 
     private fun showProgressBar() {

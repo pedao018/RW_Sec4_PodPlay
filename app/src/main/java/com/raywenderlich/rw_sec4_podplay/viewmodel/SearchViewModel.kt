@@ -23,7 +23,6 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         return emptyList()
     }
 
-
     private fun itunesPodcastToPodcastSummaryView(
         itunesPodcast: PodcastResponse.ItunesPodcast
     ):
