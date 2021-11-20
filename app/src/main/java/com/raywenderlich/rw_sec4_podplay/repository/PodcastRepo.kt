@@ -42,6 +42,40 @@ class PodcastRepo(
         return podcastDao.loadPodcasts()
     }
 
+    suspend fun updatePodcastEpisodes(): MutableList<PodcastUpdateInfo> {
+        val updatedPodcasts: MutableList<PodcastUpdateInfo> = mutableListOf()
+        val podcasts = podcastDao.loadPodcastsStatic()
+        for (podcast in podcasts) {
+            val newEpisodes = getNewEpisodes(podcast)
+            if (newEpisodes.count() > 0) {
+                podcast.id?.let {
+                    saveNewEpisodes(it, newEpisodes)
+                    updatedPodcasts.add(
+                        PodcastUpdateInfo(
+                            podcast.feedUrl, podcast.feedTitle, newEpisodes.count()
+                        )
+                    )
+                }
+            }
+        }
+        return updatedPodcasts
+    }
+
+    private suspend fun getNewEpisodes(localPodcast: Podcast): List<Episode> {
+        val response = feedService.getFeed(localPodcast.feedUrl)
+        if (response != null) {
+            val remotePodcast =
+                rssResponseToPodcast(localPodcast.feedUrl, localPodcast.imageUrl, response)
+            remotePodcast?.let {
+                val localEpisodes = podcastDao.loadEpisodes(localPodcast.id!!)
+                return remotePodcast.episodes.filter { episode ->
+                    localEpisodes.find { episode.guid == it.guid } == null
+                }
+            }
+        }
+        return listOf()
+    }
+
     fun save(podcast: Podcast) {
         GlobalScope.launch {
             val podcastId = podcastDao.insertPodcast(podcast)
@@ -55,6 +89,15 @@ class PodcastRepo(
     fun delete(podcast: Podcast) {
         GlobalScope.launch {
             podcastDao.deletePodcast(podcast)
+        }
+    }
+
+    private fun saveNewEpisodes(podcastId: Long, episodes: List<Episode>) {
+        GlobalScope.launch {
+            for (episode in episodes) {
+                episode.podcastId = podcastId
+                podcastDao.insertEpisode(episode)
+            }
         }
     }
 
@@ -87,5 +130,11 @@ class PodcastRepo(
             )
         }
     }
+
+    class PodcastUpdateInfo(
+        val feedUrl: String,
+        val name: String,
+        val newCount: Int
+    )
 
 }

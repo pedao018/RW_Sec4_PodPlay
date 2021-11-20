@@ -52,9 +52,22 @@ class PodcastViewModel(application: Application) : AndroidViewModel(application)
         return livePodcastSummaryData
     }
 
+    suspend fun setActivePodcast(feedUrl: String): SearchViewModel.PodcastSummaryViewData? {
+        val repo = podcastRepo ?: return null
+        val podcast = repo.getPodcast(feedUrl)
+        if (podcast == null) {
+            return null
+        } else {
+            _podcastLiveData.value = podcastToPodcastView(podcast)
+            activePodcast = podcast
+            return podcastToSummaryView(podcast)
+        }
+    }
+
     fun saveActivePodcast() {
         val repo = podcastRepo ?: return
         activePodcast?.let {
+            it.episodes = it.episodes.drop(1)
             repo.save(it)
         }
     }

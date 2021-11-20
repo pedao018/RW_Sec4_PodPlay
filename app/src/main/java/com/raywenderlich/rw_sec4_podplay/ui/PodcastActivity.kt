@@ -1,35 +1,43 @@
 package com.raywenderlich.rw_sec4_podplay.ui
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.SearchManager
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.view.WindowManager
-import android.widget.Toast
 import androidx.activity.viewModels
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SearchView
+import androidx.core.app.NotificationCompat
 import androidx.lifecycle.viewModelScope
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.work.*
 import com.raywenderlich.rw_sec4_podplay.R
 import com.raywenderlich.rw_sec4_podplay.adapter.PodcastListAdapter
 import com.raywenderlich.rw_sec4_podplay.databinding.ActivityPodcastBinding
+import com.raywenderlich.rw_sec4_podplay.db.PodPlayDatabase
 import com.raywenderlich.rw_sec4_podplay.repository.ItunesRepo
 import com.raywenderlich.rw_sec4_podplay.repository.PodcastRepo
 import com.raywenderlich.rw_sec4_podplay.service.ItunesService
 import com.raywenderlich.rw_sec4_podplay.service.RssFeedService
 import com.raywenderlich.rw_sec4_podplay.viewmodel.PodcastViewModel
 import com.raywenderlich.rw_sec4_podplay.viewmodel.SearchViewModel
+import com.raywenderlich.rw_sec4_podplay.worker.EpisodeUpdateWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
 
 class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapterListener,
     PodcastDetailsFragment.OnPodcastDetailsListener {
@@ -41,6 +49,10 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
 
     companion object {
         private const val TAG_DETAILS_FRAGMENT = "DetailsFragment"
+        private const val TAG_EPISODE_UPDATE_JOB = "com.raywenderlich.podplay.episodes"
+
+        const val EPISODE_CHANNEL_ID = "podplay_episodes_channel"
+        const val EXTRA_FEED_URL = "PodcastFeedUrl"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,6 +69,7 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
         handleIntent(intent)
 
         addBackStackListener()
+        scheduleJobs()
     }
 
     private fun setupToolbar() {
@@ -154,20 +167,30 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
     }
 
     private fun showDetailsFragment() {
-        val podcastDetailsFragment = createPodcastDetailsFragment()
+        var podcastDetailsFragment = supportFragmentManager
+            .findFragmentByTag(TAG_DETAILS_FRAGMENT) as PodcastDetailsFragment?
+        if (podcastDetailsFragment == null) {
+            podcastDetailsFragment = PodcastDetailsFragment.newInstance()
+            /*
+            The fragment is added to the supportFragmentManager.
+            The TAG_DETAILS_FRAGMENT constant you defined earlier is used to identify the fragment.
+            addToBackStack() is used to make sure the back button works to close the fragment
+            Adding the Fragment to the back stack is essential for proper app navigation.
+            If you don’t add the call to addToBackStack(), then pressing the back button while the Fragment is displayed closes the app.
+            * */
+            supportFragmentManager.beginTransaction().add(
+                R.id.podcastDetailsContainer,
+                podcastDetailsFragment, TAG_DETAILS_FRAGMENT
+            )
+                .addToBackStack(TAG_DETAILS_FRAGMENT).commit()
+        } else {
+            //Replace là replace tất cả fragment hiện tại
+            supportFragmentManager.beginTransaction().replace(
+                R.id.podcastDetailsContainer,
+                podcastDetailsFragment, TAG_DETAILS_FRAGMENT
+            ).commit()
+        }
 
-        /*
-        The fragment is added to the supportFragmentManager.
-        The TAG_DETAILS_FRAGMENT constant you defined earlier is used to identify the fragment.
-        addToBackStack() is used to make sure the back button works to close the fragment
-        Adding the Fragment to the back stack is essential for proper app navigation.
-        If you don’t add the call to addToBackStack(), then pressing the back button while the Fragment is displayed closes the app.
-        * */
-        supportFragmentManager.beginTransaction().add(
-            R.id.podcastDetailsContainer,
-            podcastDetailsFragment, TAG_DETAILS_FRAGMENT
-        )
-            .addToBackStack("DetailsFragment").commit()
     }
 
     private fun createPodcastDetailsFragment(): PodcastDetailsFragment {
@@ -197,12 +220,24 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
             val query = intent.getStringExtra(SearchManager.QUERY) ?: return
             performSearch(query)
         }
+
+        //Dành cho Notify
+        val podcastFeedUrl = intent.getStringExtra(EpisodeUpdateWorker.EXTRA_FEED_URL)
+        if (podcastFeedUrl != null) {
+            podcastViewModel.viewModelScope.launch {
+                podcastViewModel.setActivePodcast(podcastFeedUrl)
+                //podcastSummaryViewData?.let { podcastSummaryView -> onShowDetails(podcastSummaryView) }
+            }
+        }
     }
 
     private fun performSearch(term: String) {
         showProgressBar()
+
+        //Background thread
         GlobalScope.launch {
             val listPodcast = searchViewModel.searchPodcasts(term)
+            //Main thread
             withContext(Dispatchers.Main) {
                 podcastListAdapter.setSearchData(listPodcast)
                 binding.toolbar.title = term
@@ -245,6 +280,62 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
         supportFragmentManager.popBackStack()
     }
 
+    //For Workmanager
+    private fun scheduleJobs() {
+        /*
+        Create a list of constraints for the worker to run under.
+        WorkManager will not execute your worker until the constraints are met.
+        Constraints are constructed using the Constraints.Builder() function.
+        In this case, the following constraints are used.
+        setRequiredNetworkType(NetworkType.CONNECTED): Only execute the worker when the device is connected to a network.
+        Other network types include UNMETERED, METERED, and NOT_REQUIRED.
+        UNMETERED is useful if you don’t want the work to execute when connected to a cellular network.
+        Note: Be aware that if you are experimenting with different options, setting this to NetworkType.
+        UNMETERED may cause the work not to run on the emulator.
+        * */
+        val constraints: Constraints = Constraints.Builder().apply {
+            setRequiredNetworkType(NetworkType.CONNECTED)
+            /*
+            setRequiresCharging(): Only execute the worker when the device is plugged into a power source.
+            This will prevent the worker from draining battery life.
+            * */
+            setRequiresCharging(true)
+        }.build()
+
+        /*
+        Create a new work request using PeriodicWorkRequestBuilder().
+        This is one of two primary options for building work requests.
+        The other option is OneTimeWorkRequestBuilder() and it is intended for one-time work requests.
+        PeriodicWorkRequestBuilder() is for work that you want to be repeated at set intervals.
+        There are several constructor variants for PeriodicWorkRequestBuilder().
+        You are using a version that takes two parameters: The repeat interval and a time unit.
+        WorkManager will run the work request once during the interval you specify.
+        It can run at any time during the interval as long as the constraints are met.
+        In this case, you are telling it to run once every hour.
+        Many additional settings can be applied to PeriodicWorkRequestBuilder, such as an initial delay interval, and input data for the worker.
+        The only setting applied in this case is setConstraints, which applies the constraints you defined in step 1.
+        * */
+        val request = PeriodicWorkRequestBuilder<EpisodeUpdateWorker>(
+            15, TimeUnit.MINUTES
+        )
+            .setConstraints(constraints)
+            .build()
+
+        /*
+        Use enqueueUniquePeriodicWork() on an instance of the WorkManager to schedule the work request.
+        The first parameter is a unique name for the work request.
+        Only one work request will run at a time using the name you provide.
+        The second parameter, ExistingPeriodicWorkPolicy.REPLACE, specifies that this should replace any existing work with the same name.
+        The other option is ExistingPeriodicWorkPolicy.KEEP and it will allow an existing work request to keep running if there is already one with the same name.
+        Using the REPLACE options is safer when testing different options as it will guarantee that your new options are applied.
+        The last parameter is the work request to schedule.
+        * */
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            TAG_EPISODE_UPDATE_JOB,
+            ExistingPeriodicWorkPolicy.REPLACE, request
+        )
+    }
+
     private fun showProgressBar() {
         binding.progressBar.visibility = View.VISIBLE
         disableUserInteraction()
@@ -277,6 +368,5 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
             .create()
             .show()
     }
-
 
 }

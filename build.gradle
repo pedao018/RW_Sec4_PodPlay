@@ -8,6 +8,7 @@ buildscript {
         retrofit_version = '2.9.0'
         okhttp_version = '4.8.1'
         room_version = '2.3.0'
+        work_version = '2.7.1'
     }
     repositories {
         google()
