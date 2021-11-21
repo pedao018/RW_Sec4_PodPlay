@@ -72,5 +72,9 @@ dependencies {
     //Workmanager
     implementation "androidx.work:work-runtime-ktx:$work_version"
 
+    //MediaBrowserService
+    implementation "androidx.media:media:1.4.3"
+
+
 
 }

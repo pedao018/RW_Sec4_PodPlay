@@ -4,6 +4,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!--Since API 28, you must now add a permission to run your app as a foreground service-->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
     <!--Starting with Android 9 (API Level 28), by default, apps may not use cleartext network traffic.
     Cleartext traffic results from connections where the URL starts with HTTP, not HTTPS.
@@ -42,6 +44,23 @@
                 android:resource="@xml/searchable" />
 
         </activity>
+
+        <!--Dành cho MediaBrowserService-->
+        <service
+            android:name=".service.PodplayMediaService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
+        <receiver
+            android:name="androidx.media.session.MediaButtonReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>

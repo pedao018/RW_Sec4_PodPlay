@@ -10,17 +10,27 @@ import com.raywenderlich.rw_sec4_podplay.util.HtmlUtils
 import com.raywenderlich.rw_sec4_podplay.viewmodel.PodcastViewModel
 
 class EpisodeListAdapter(
-    private var episodeViewList: List<PodcastViewModel.EpisodeViewData>?
+    private var episodeViewList: List<PodcastViewModel.EpisodeViewData>?,
+    private val episodeListAdapterListener: EpisodeListAdapterListener
 ) : RecyclerView.Adapter<EpisodeListAdapter.ViewHolder>() {
 
     inner class ViewHolder(
-        databinding: EpisodeItemBinding
+        databinding: EpisodeItemBinding,
+        val episodeListAdapterListener: EpisodeListAdapterListener
     ) : RecyclerView.ViewHolder(databinding.root) {
         var episodeViewData: PodcastViewModel.EpisodeViewData? = null
         val titleTextView: TextView = databinding.titleView
         val descTextView: TextView = databinding.descView
         val durationTextView: TextView = databinding.durationView
         val releaseDateTextView: TextView = databinding.releaseDateView
+
+        init {
+            databinding.root.setOnClickListener {
+                episodeViewData?.let {
+                    episodeListAdapterListener.onSelectedEpisode(it)
+                }
+            }
+        }
     }
 
     override fun onCreateViewHolder(
@@ -29,7 +39,7 @@ class EpisodeListAdapter(
         return ViewHolder(
             EpisodeItemBinding.inflate(
                 LayoutInflater.from(parent.context), parent, false
-            )
+            ), episodeListAdapterListener
         )
     }
 
@@ -48,5 +58,9 @@ class EpisodeListAdapter(
 
     override fun getItemCount(): Int {
         return episodeViewList?.size ?: 0
+    }
+
+    interface EpisodeListAdapterListener {
+        fun onSelectedEpisode(episodeViewData: PodcastViewModel.EpisodeViewData)
     }
 }

@@ -50,9 +50,6 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
     companion object {
         private const val TAG_DETAILS_FRAGMENT = "DetailsFragment"
         private const val TAG_EPISODE_UPDATE_JOB = "com.raywenderlich.podplay.episodes"
-
-        const val EPISODE_CHANNEL_ID = "podplay_episodes_channel"
-        const val EXTRA_FEED_URL = "PodcastFeedUrl"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
