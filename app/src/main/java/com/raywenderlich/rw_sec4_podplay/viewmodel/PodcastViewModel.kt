@@ -68,7 +68,7 @@ class PodcastViewModel(application: Application) : AndroidViewModel(application)
     fun saveActivePodcast() {
         val repo = podcastRepo ?: return
         activePodcast?.let {
-            it.episodes = it.episodes.drop(1)
+            //it.episodes = it.episodes.drop(1)
             repo.save(it)
         }
     }
