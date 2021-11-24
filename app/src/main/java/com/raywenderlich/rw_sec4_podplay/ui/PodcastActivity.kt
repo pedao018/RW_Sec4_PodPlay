@@ -50,6 +50,8 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
     companion object {
         private const val TAG_DETAILS_FRAGMENT = "DetailsFragment"
         private const val TAG_EPISODE_UPDATE_JOB = "com.raywenderlich.podplay.episodes"
+        private const val TAG_PLAYER_FRAGMENT = "PlayerFragment"
+
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -187,7 +189,6 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
                 podcastDetailsFragment, TAG_DETAILS_FRAGMENT
             ).commit()
         }
-
     }
 
     private fun createPodcastDetailsFragment(): PodcastDetailsFragment {
@@ -332,6 +333,46 @@ class PodcastActivity : AppCompatActivity(), PodcastListAdapter.PodcastListAdapt
             ExistingPeriodicWorkPolicy.REPLACE, request
         )
     }
+
+    override fun onShowEpisodePlayer(episodeViewData: PodcastViewModel.EpisodeViewData) {
+        podcastViewModel.activeEpisodeViewData = episodeViewData
+        showPlayerFragment()
+    }
+
+    private fun showPlayerFragment() {
+        var episodePlayerFragment = supportFragmentManager
+            .findFragmentByTag(TAG_PLAYER_FRAGMENT) as EpisodePlayerFragment?
+        if (episodePlayerFragment == null) {
+            episodePlayerFragment = EpisodePlayerFragment.newInstance()
+            supportFragmentManager.beginTransaction().add(
+                R.id.podcastDetailsContainer,
+                episodePlayerFragment, TAG_PLAYER_FRAGMENT
+            )
+                .addToBackStack(TAG_PLAYER_FRAGMENT).commit()
+        } else {
+            //Replace là replace tất cả fragment hiện tại
+            supportFragmentManager.beginTransaction().replace(
+                R.id.podcastDetailsContainer,
+                episodePlayerFragment, TAG_PLAYER_FRAGMENT
+            ).commit()
+        }
+        binding.podcastRecyclerView.visibility = View.INVISIBLE
+        searchMenuItem.isVisible = false
+    }
+
+
+    private fun createEpisodePlayerFragment(): EpisodePlayerFragment {
+        var episodePlayerFragment =
+            supportFragmentManager.findFragmentByTag(TAG_PLAYER_FRAGMENT) as
+                    EpisodePlayerFragment?
+
+        if (episodePlayerFragment == null) {
+            episodePlayerFragment = EpisodePlayerFragment.newInstance()
+        }
+
+        return episodePlayerFragment
+    }
+
 
     private fun showProgressBar() {
         binding.progressBar.visibility = View.VISIBLE
